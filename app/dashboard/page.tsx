@@ -1,20 +1,69 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowRight, Zap, Users, TrendingUp } from "lucide-react"
 import Link from "next/link"
+import { supabase } from "@/lib/supabase"
 
 export default function DashboardPage() {
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(true)
   const [stats] = useState({
     matches: 12,
     connections: 8,
     messages: 3,
     communities: 5,
   })
+
+  useEffect(() => {
+    checkAuth()
+  }, [])
+
+  const checkAuth = async () => {
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+      if (userError || !user) {
+        router.push('/login')
+        return
+      }
+
+      // Check if profile is complete
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('onboarding_completed')
+        .eq('user_id', user.id)
+        .single()
+
+      if (!profile || !profile.onboarding_completed) {
+        router.push('/onboarding')
+        return
+      }
+
+      setIsLoading(false)
+    } catch (error) {
+      console.error('Auth check error:', error)
+      router.push('/login')
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4 animate-spin">
+            <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent" />
+          </div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   const recentMatches = [
     {

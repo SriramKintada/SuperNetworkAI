@@ -3,17 +3,65 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { OnboardingSteps } from "@/components/onboarding-steps"
+import { supabase } from "@/lib/supabase"
 
 export default function OnboardingPage() {
   const router = useRouter()
   const [isCompleting, setIsCompleting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleComplete = async () => {
+  const handleComplete = async (formData: any) => {
     setIsCompleting(true)
-    // TODO: Save onboarding data
-    setTimeout(() => {
+    setError(null)
+
+    try {
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) throw new Error("User not authenticated")
+
+      // Create profile text for embedding
+      const intentText = formData.goals.join(", ")
+      const profileText = `${formData.title} at ${formData.company}. ${formData.bio}. Looking for: ${intentText}.`
+
+      // Save profile to database
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          user_id: user.id,
+          name: user.user_metadata?.name || user.user_metadata?.full_name || 'User',
+          email: user.email,
+          photo_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+          bio: formData.bio,
+          current_role: formData.title,
+          current_company: formData.company,
+          intent_text: intentText,
+          intent_structured: { looking_for: formData.goals, communities: formData.communities },
+          profile_complete: true,
+          onboarding_completed: true,
+        })
+        .select()
+        .single()
+
+      if (profileError) throw profileError
+
+      // Generate embedding for the profile
+      const { data: functionData, error: functionError } = await supabase.functions.invoke('generate-embedding', {
+        body: {
+          profileId: profile.id
+        }
+      })
+
+      if (functionError) {
+        console.error("Embedding generation failed:", functionError)
+        // Don't block onboarding if embedding fails - can be regenerated later
+      }
+
       router.push("/dashboard")
-    }, 500)
+    } catch (err: any) {
+      console.error("Onboarding error:", err)
+      setError(err.message || "Failed to complete onboarding. Please try again.")
+      setIsCompleting(false)
+    }
   }
 
   return (
@@ -23,6 +71,12 @@ export default function OnboardingPage() {
           <h1 className="text-4xl font-bold mb-2">Welcome to SuperNetworkAI</h1>
           <p className="text-lg text-muted-foreground">Let's set up your profile to find the perfect matches</p>
         </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg">
+            {error}
+          </div>
+        )}
 
         <OnboardingSteps onComplete={handleComplete} />
 

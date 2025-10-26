@@ -7,10 +7,39 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { SearchIcon, Filter } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
 export default function SearchPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedGoals, setSelectedGoals] = useState<string[]>([])
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false)
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return
+
+    setIsSearching(true)
+    setHasSearched(true)
+
+    try {
+      const { data, error } = await supabase.functions.invoke('search-profiles', {
+        body: {
+          query: searchQuery,
+          limit: 20
+        }
+      })
+
+      if (error) throw error
+
+      setSearchResults(data.results || [])
+    } catch (error) {
+      console.error('Search error:', error)
+      setSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
 
   const mockMatches = [
     {
@@ -87,15 +116,26 @@ export default function SearchPage() {
           {/* Search and Filters */}
           <div className="grid md:grid-cols-4 gap-6 mb-8">
             {/* Search Bar */}
-            <div className="md:col-span-2">
-              <div className="relative">
-                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name, title, or company..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
+            <div className="md:col-span-3">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    placeholder='Try: "technical cofounder who knows RAG" or "designer looking for startups"'
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    className="pl-10"
+                    disabled={isSearching}
+                  />
+                </div>
+                <Button
+                  onClick={handleSearch}
+                  disabled={isSearching || !searchQuery.trim()}
+                  className="gap-2"
+                >
+                  {isSearching ? 'Searching...' : 'Search'}
+                </Button>
               </div>
             </div>
 
@@ -104,35 +144,70 @@ export default function SearchPage() {
               <Filter className="w-4 h-4" />
               Filters
             </Button>
-
-            <Button>Search</Button>
           </div>
 
-          {/* Goal Filters */}
-          <Card className="p-6 mb-8">
-            <h3 className="font-semibold mb-4 flex items-center gap-2">
-              <Filter className="w-4 h-4" />
-              Filter by Goals
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {goals.map((goal) => (
-                <Button
-                  key={goal}
-                  variant={selectedGoals.includes(goal) ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => toggleGoal(goal)}
-                >
-                  {goal}
-                </Button>
-              ))}
+          {/* Search Results Info */}
+          {hasSearched && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                {isSearching
+                  ? 'Searching with AI-powered semantic search...'
+                  : `Found ${searchResults.length} ${searchResults.length === 1 ? 'match' : 'matches'} for "${searchQuery}"`}
+              </p>
             </div>
-          </Card>
+          )}
+
+          {/* Goal Filters */}
+          {!hasSearched && (
+            <Card className="p-6 mb-8">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Filter className="w-4 h-4" />
+                Filter by Goals
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {goals.map((goal) => (
+                  <Button
+                    key={goal}
+                    variant={selectedGoals.includes(goal) ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleGoal(goal)}
+                  >
+                    {goal}
+                  </Button>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Matches Grid */}
           <div className="grid md:grid-cols-2 gap-6">
-            {mockMatches.map((match) => (
-              <MatchCard key={match.id} {...match} onConnect={handleConnect} onPass={handlePass} />
-            ))}
+            {hasSearched ? (
+              searchResults.length > 0 ? (
+                searchResults.map((match) => (
+                  <MatchCard
+                    key={match.id}
+                    id={match.id}
+                    name={match.name}
+                    title={match.current_role || match.headline || 'Member'}
+                    company={match.current_company || ''}
+                    bio={match.bio || ''}
+                    goals={match.intent_structured?.looking_for || []}
+                    matchScore={Math.round((1 - (match.distance || 0)) * 100)}
+                    onConnect={handleConnect}
+                    onPass={handlePass}
+                  />
+                ))
+              ) : (
+                <div className="col-span-2 text-center py-12">
+                  <p className="text-muted-foreground mb-2">No matches found</p>
+                  <p className="text-sm text-muted-foreground">Try a different search query</p>
+                </div>
+              )
+            ) : (
+              mockMatches.map((match) => (
+                <MatchCard key={match.id} {...match} onConnect={handleConnect} onPass={handlePass} />
+              ))
+            )}
           </div>
         </div>
       </main>

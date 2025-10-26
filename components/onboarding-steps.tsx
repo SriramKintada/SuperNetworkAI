@@ -20,7 +20,7 @@ const STEPS: OnboardingStep[] = [
 ]
 
 interface OnboardingStepsProps {
-  onComplete: () => void
+  onComplete: (formData: any) => void
 }
 
 export function OnboardingSteps({ onComplete }: OnboardingStepsProps) {
@@ -38,7 +38,7 @@ export function OnboardingSteps({ onComplete }: OnboardingStepsProps) {
     if (currentStep < STEPS.length) {
       setCurrentStep(currentStep + 1)
     } else {
-      onComplete()
+      onComplete(formData)
     }
   }
 
