@@ -167,7 +167,7 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
               <section>
                 <h2 className="text-2xl font-bold text-foreground mb-4">Recent Activity</h2>
                 <div className="space-y-3">
-                  {community.recentActivity.map((activity, idx) => (
+                  {community.recentActivity.map((activity: any, idx: number) => (
                     <div key={idx} className="flex items-start gap-3 p-3 bg-white border border-border rounded-lg">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                         <Users className="w-5 h-5 text-primary" />
