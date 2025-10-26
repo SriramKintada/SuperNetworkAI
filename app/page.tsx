@@ -30,7 +30,7 @@ export default function Home() {
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
                 <Button size="lg" asChild className="gap-2">
-                  <Link href="/dashboard">
+                  <Link href="/signup">
                     Get Started Free
                     <ArrowRight className="w-4 h-4" />
                   </Link>
@@ -174,7 +174,7 @@ export default function Home() {
               Join thousands of professionals already building meaningful connections on SuperNetworkAI.
             </p>
             <Button size="lg" variant="secondary" asChild>
-              <Link href="/dashboard">Get Started Free</Link>
+              <Link href="/signup">Get Started Free</Link>
             </Button>
           </div>
         </section>
