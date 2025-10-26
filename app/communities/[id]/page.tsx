@@ -6,6 +6,18 @@ import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Users, MapPin, Share2, Settings } from "lucide-react"
 
+// Type definitions
+interface RecentActivity {
+  user: string
+  action: string
+  time: string
+}
+
+interface CommunityStat {
+  label: string
+  value: string
+}
+
 // Mock data - replace with API call
 const COMMUNITY_DETAILS: Record<string, any> = {
   "100x-engineers": {
@@ -167,7 +179,7 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
               <section>
                 <h2 className="text-2xl font-bold text-foreground mb-4">Recent Activity</h2>
                 <div className="space-y-3">
-                  {community.recentActivity.map((activity: any, idx: number) => (
+                  {community.recentActivity.map((activity: RecentActivity, idx: number) => (
                     <div key={idx} className="flex items-start gap-3 p-3 bg-white border border-border rounded-lg">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                         <Users className="w-5 h-5 text-primary" />
@@ -190,7 +202,7 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
               {/* Stats Cards */}
               <div className="bg-white border border-border rounded-lg p-6 space-y-4">
                 <h3 className="font-semibold text-foreground">Community Stats</h3>
-                {community.stats.map((stat: any, idx: number) => (
+                {community.stats.map((stat: CommunityStat, idx: number) => (
                   <div
                     key={idx}
                     className="flex justify-between items-center pb-3 border-b border-border last:border-0 last:pb-0"
