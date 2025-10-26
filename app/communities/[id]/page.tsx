@@ -142,7 +142,7 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
               <section>
                 <h2 className="text-2xl font-bold text-foreground mb-4">Top Skills</h2>
                 <div className="flex flex-wrap gap-2">
-                  {community.skills.map((skill) => (
+                  {community.skills.map((skill: string) => (
                     <span key={skill} className="px-4 py-2 bg-primary/10 text-primary rounded-full text-sm font-medium">
                       {skill}
                     </span>
