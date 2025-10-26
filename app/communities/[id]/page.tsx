@@ -154,7 +154,7 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
               <section>
                 <h2 className="text-2xl font-bold text-foreground mb-4">What Members Are Looking For</h2>
                 <div className="grid grid-cols-3 gap-4">
-                  {community.topIntents.map((intent) => (
+                  {community.topIntents.map((intent: string) => (
                     <div key={intent} className="p-4 bg-white border border-border rounded-lg text-center">
                       <p className="text-sm text-muted-foreground mb-1">Looking for</p>
                       <p className="font-semibold text-foreground">{intent}</p>
