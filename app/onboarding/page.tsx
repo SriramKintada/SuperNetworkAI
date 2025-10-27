@@ -19,9 +19,10 @@ export default function OnboardingPage() {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) throw new Error("User not authenticated")
 
-      // Create profile text for embedding
+      // Create profile text for embedding (include all enriched data)
       const intentText = formData.goals.join(", ")
-      const profileText = `${formData.title} at ${formData.company}. ${formData.bio}. Looking for: ${intentText}.`
+      const skillsText = formData.skills?.join(", ") || ""
+      const profileText = `${formData.title} at ${formData.company}. ${formData.bio}. ${formData.location ? 'Based in ' + formData.location + '.' : ''} Skills: ${skillsText}. Looking for: ${intentText}.`
 
       // Save profile to database
       // Using headline instead of current_role for compatibility
@@ -35,12 +36,17 @@ export default function OnboardingPage() {
       }
 
       // Add optional fields if they exist in schema
-      const optionalFields = {
+      const optionalFields: any = {
         photo_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
         intent_structured: { looking_for: formData.goals, communities: formData.communities },
         profile_complete: true,
         onboarding_completed: true,
       }
+
+      // Add LinkedIn-enriched fields
+      if (formData.location) optionalFields.location = formData.location
+      if (formData.skills && formData.skills.length > 0) optionalFields.skills = formData.skills
+      if (formData.linkedin_url) optionalFields.linkedin_url = formData.linkedin_url
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')

@@ -4,7 +4,8 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
-import { CheckCircle2, ArrowRight } from "lucide-react"
+import { CheckCircle2, ArrowRight, Loader2 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
 interface OnboardingStep {
   id: number
@@ -13,6 +14,7 @@ interface OnboardingStep {
 }
 
 const STEPS: OnboardingStep[] = [
+  { id: 0, title: "LinkedIn Import", description: "Import from LinkedIn (optional)" },
   { id: 1, title: "Profile Setup", description: "Tell us about yourself" },
   { id: 2, title: "Goals & Interests", description: "What are you looking for?" },
   { id: 3, title: "Communities", description: "Join relevant communities" },
@@ -24,18 +26,61 @@ interface OnboardingStepsProps {
 }
 
 export function OnboardingSteps({ onComplete }: OnboardingStepsProps) {
-  const [currentStep, setCurrentStep] = useState(1)
+  const [currentStep, setCurrentStep] = useState(0)
+  const [linkedinUrl, setLinkedinUrl] = useState("")
+  const [isImporting, setIsImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     bio: "",
     title: "",
     company: "",
+    location: "",
+    skills: [] as string[],
+    linkedin_url: "",
     goals: [] as string[],
     communities: [] as string[],
     notifications: true,
   })
 
+  const handleLinkedinImport = async () => {
+    if (!linkedinUrl.trim()) {
+      setImportError("Please enter a LinkedIn URL")
+      return
+    }
+
+    setIsImporting(true)
+    setImportError(null)
+
+    try {
+      const { data, error } = await supabase.functions.invoke('enrich-linkedin-profile', {
+        body: { linkedinUrl }
+      })
+
+      if (error) throw error
+
+      // Populate form data with LinkedIn data
+      setFormData({
+        ...formData,
+        bio: data.bio || formData.bio,
+        title: data.current_role || formData.title,
+        company: data.current_company || formData.company,
+        location: data.location || formData.location,
+        skills: data.skills || formData.skills,
+        linkedin_url: linkedinUrl,
+      })
+
+      // Auto-advance to next step
+      setCurrentStep(1)
+    } catch (error: any) {
+      console.error('LinkedIn import error:', error)
+      setImportError(error.message || 'Failed to import LinkedIn profile. Please try again or skip.')
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
   const handleNext = () => {
-    if (currentStep < STEPS.length) {
+    if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1)
     } else {
       onComplete(formData)
@@ -43,7 +88,7 @@ export function OnboardingSteps({ onComplete }: OnboardingStepsProps) {
   }
 
   const handlePrevious = () => {
-    if (currentStep > 1) {
+    if (currentStep > 0) {
       setCurrentStep(currentStep - 1)
     }
   }
@@ -96,8 +141,67 @@ export function OnboardingSteps({ onComplete }: OnboardingStepsProps) {
 
       {/* Step Content */}
       <Card className="p-8">
-        <h2 className="text-2xl font-bold mb-2">{STEPS[currentStep - 1].title}</h2>
-        <p className="text-muted-foreground mb-6">{STEPS[currentStep - 1].description}</p>
+        <h2 className="text-2xl font-bold mb-2">{STEPS[currentStep].title}</h2>
+        <p className="text-muted-foreground mb-6">{STEPS[currentStep].description}</p>
+
+        {/* Step 0: LinkedIn Import */}
+        {currentStep === 0 && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-blue-800">
+                <strong>Save time!</strong> Import your profile from LinkedIn and we'll automatically fill in your details using AI.
+              </p>
+            </div>
+
+            {importError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-red-800">{importError}</p>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium mb-2">LinkedIn Profile URL</label>
+              <Input
+                type="url"
+                placeholder="https://www.linkedin.com/in/your-profile"
+                value={linkedinUrl}
+                onChange={(e) => setLinkedinUrl(e.target.value)}
+                disabled={isImporting}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Your public LinkedIn URL (e.g., linkedin.com/in/yourname)
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                onClick={handleLinkedinImport}
+                disabled={isImporting || !linkedinUrl.trim()}
+                className="flex-1"
+              >
+                {isImporting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isImporting ? 'Importing...' : 'Import from LinkedIn'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setCurrentStep(1)}
+                disabled={isImporting}
+                className="flex-1"
+              >
+                Skip & Fill Manually
+              </Button>
+            </div>
+
+            {isImporting && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-4">
+                <p className="text-sm text-amber-800">
+                  <Loader2 className="w-4 h-4 inline mr-2 animate-spin" />
+                  Scraping your LinkedIn profile and extracting key details with AI... This may take 15-30 seconds.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Step 1: Profile Setup */}
         {currentStep === 1 && (
@@ -213,20 +317,22 @@ export function OnboardingSteps({ onComplete }: OnboardingStepsProps) {
         )}
 
         {/* Navigation */}
-        <div className="flex gap-4 mt-8 pt-6 border-t border-border">
-          <Button
-            variant="outline"
-            onClick={handlePrevious}
-            disabled={currentStep === 1}
-            className="flex-1 bg-transparent"
-          >
-            Previous
-          </Button>
-          <Button onClick={handleNext} className="flex-1 gap-2">
-            {currentStep === STEPS.length ? "Complete Onboarding" : "Next"}
-            {currentStep < STEPS.length && <ArrowRight className="w-4 h-4" />}
-          </Button>
-        </div>
+        {currentStep > 0 && (
+          <div className="flex gap-4 mt-8 pt-6 border-t border-border">
+            <Button
+              variant="outline"
+              onClick={handlePrevious}
+              disabled={currentStep === 0}
+              className="flex-1 bg-transparent"
+            >
+              Previous
+            </Button>
+            <Button onClick={handleNext} className="flex-1 gap-2">
+              {currentStep === STEPS.length - 1 ? "Complete Onboarding" : "Next"}
+              {currentStep < STEPS.length - 1 && <ArrowRight className="w-4 h-4" />}
+            </Button>
+          </div>
+        )}
       </Card>
     </div>
   )
