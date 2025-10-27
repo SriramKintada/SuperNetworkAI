@@ -5,7 +5,19 @@
       "Bash(supabase db push:*)",
       "Bash(where:*)",
       "Bash(npm install:*)",
-      "Bash(node scripts/test-deployment.js:*)"
+      "Bash(node scripts/test-deployment.js:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(node scripts/check-schema.js:*)",
+      "Bash(node scripts/test-embeddings-storage.js:*)",
+      "Bash(node scripts/generate-missing-embeddings.js:*)",
+      "Bash(node scripts/test-edge-functions.js:*)",
+      "Bash(supabase functions:*)",
+      "Bash(node:*)",
+      "Bash(npx supabase:*)",
+      "Bash($env:SUPABASE_ACCESS_TOKEN=\"sbp_326b7563fd2154a49505672e20aa08afe20946de\")",
+      "Bash(export SUPABASE_ACCESS_TOKEN=\"sbp_326b7563fd2154a49505672e20aa08afe20946de\")"
     ],
     "deny": [],
     "ask": []

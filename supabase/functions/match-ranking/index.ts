@@ -14,10 +14,12 @@ serve(async (req) => {
     const prompt = `Rank these ${matches.length} profiles by compatibility with query: "${query}"
 
 Profiles:
-${matches.map((m: any, i: number) => `${i + 1}. ${m.name} - ${m.headline}\n   Intent: ${m.intent_text}\n   Skills: ${m.skills?.join(', ')}`).join('\n\n')}
+${matches.map((m: any, i: number) => `Profile ${i}: ${m.name} - ${m.headline}\n   Intent: ${m.intent_text}\n   Skills: ${m.skills?.join(', ')}`).join('\n\n')}
 
 Return ONLY valid JSON array (no markdown):
-[{"profile_id": "uuid", "match_score": 95, "explanation": "reason"}, ...]`
+[{"profile_index": 0, "match_score": 95, "explanation": "reason"}, ...]
+
+Use profile_index (0, 1, 2...) to identify profiles, not IDs.`
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -39,10 +41,10 @@ Return ONLY valid JSON array (no markdown):
     const ranked = JSON.parse(responseText)
 
     const results = ranked.map((r: any) => ({
-      profile: matches.find((m: any) => m.id === r.profile_id),
+      profile: matches[r.profile_index],
       match_score: r.match_score / 100,
       explanation: r.explanation,
-    }))
+    })).filter((r: any) => r.profile !== undefined)
 
     return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
