@@ -1,14 +1,18 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Save, Lock, Globe, Eye } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
 export default function PrivacySettingsPage() {
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(true)
   const [privacySettings, setPrivacySettings] = useState({
-    profileVisibility: "public", // public, private, community-specific
+    profileVisibility: "community_only", // public, private, community_only
     showEmail: false,
     showPhone: false,
     allowMessages: "everyone", // everyone, connections-only, disabled
@@ -16,17 +20,94 @@ export default function PrivacySettingsPage() {
     allowProfileSearch: true,
   })
 
-  const [communityPrivacy, setCommunityPrivacy] = useState([
-    { id: "1", name: "Startups & Founders", visibility: "public" },
-    { id: "2", name: "Tech & Innovation", visibility: "community-specific" },
-    { id: "3", name: "Business & Strategy", visibility: "private" },
-  ])
-
+  const [communityPrivacy, setCommunityPrivacy] = useState<any[]>([])
   const [isSaving, setIsSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState<{type: 'success' | 'error', text: string} | null>(null)
+
+  useEffect(() => {
+    loadSettings()
+  }, [])
+
+  const loadSettings = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/login')
+        return
+      }
+
+      // Load profile settings
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('visibility, show_in_search')
+        .eq('user_id', user.id)
+        .single()
+
+      if (profileError) throw profileError
+
+      if (profile) {
+        setPrivacySettings(prev => ({
+          ...prev,
+          profileVisibility: profile.visibility || 'community_only',
+          allowProfileSearch: profile.show_in_search !== false,
+        }))
+      }
+
+      // Load user's communities
+      const { data: communities, error: communitiesError } = await supabase
+        .from('community_members')
+        .select(`
+          community_id,
+          communities (
+            id,
+            name
+          )
+        `)
+        .eq('user_id', user.id)
+
+      if (!communitiesError && communities) {
+        const communityList = communities.map(cm => ({
+          id: cm.community_id,
+          name: cm.communities?.name || 'Unknown Community',
+          visibility: profile?.visibility || 'community_only'
+        }))
+        setCommunityPrivacy(communityList)
+      }
+
+      setIsLoading(false)
+    } catch (error: any) {
+      console.error('Error loading settings:', error)
+      setIsLoading(false)
+    }
+  }
 
   const handleSave = async () => {
     setIsSaving(true)
-    setTimeout(() => setIsSaving(false), 1000)
+    setSaveMessage(null)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      // Update profile settings
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          visibility: privacySettings.profileVisibility,
+          show_in_search: privacySettings.allowProfileSearch,
+        })
+        .eq('user_id', user.id)
+
+      if (error) throw error
+
+      setSaveMessage({ type: 'success', text: 'Privacy settings saved successfully!' })
+      setTimeout(() => setSaveMessage(null), 3000)
+    } catch (error: any) {
+      console.error('Error saving settings:', error)
+      setSaveMessage({ type: 'error', text: error.message || 'Failed to save settings' })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const getVisibilityIcon = (visibility: string) => {
@@ -55,6 +136,22 @@ export default function PrivacySettingsPage() {
     }
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex h-screen bg-background">
+        <Sidebar />
+        <main className="flex-1 md:ml-64 overflow-auto flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4 animate-spin">
+              <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+            <p className="text-muted-foreground">Loading settings...</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
@@ -66,6 +163,17 @@ export default function PrivacySettingsPage() {
             <h1 className="text-3xl font-bold mb-2">Privacy Settings</h1>
             <p className="text-muted-foreground">Control who can see your profile and contact you</p>
           </div>
+
+          {/* Success/Error Message */}
+          {saveMessage && (
+            <div className={`mb-6 p-4 rounded-lg border ${
+              saveMessage.type === 'success'
+                ? 'bg-green-50 border-green-200 text-green-800'
+                : 'bg-red-50 border-red-200 text-red-800'
+            }`}>
+              {saveMessage.text}
+            </div>
+          )}
 
           {/* Profile Visibility */}
           <Card className="p-6 mb-6">
@@ -96,8 +204,8 @@ export default function PrivacySettingsPage() {
                   <input
                     type="radio"
                     name="profileVisibility"
-                    value="community-specific"
-                    checked={privacySettings.profileVisibility === "community-specific"}
+                    value="community_only"
+                    checked={privacySettings.profileVisibility === "community_only"}
                     onChange={(e) => setPrivacySettings({ ...privacySettings, profileVisibility: e.target.value })}
                     className="w-4 h-4"
                   />

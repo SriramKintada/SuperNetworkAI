@@ -2,17 +2,22 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ArrowLeft, Lock, Globe, Copy, Check } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
 export default function CreateCommunityPage() {
+  const router = useRouter()
   const [communityType, setCommunityType] = useState<"public" | "private" | null>(null)
   const [communityName, setCommunityName] = useState("")
   const [description, setDescription] = useState("")
   const [inviteCode, setInviteCode] = useState("")
   const [copied, setCopied] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const generateInviteCode = () => {
     const code = Math.random().toString(36).substring(2, 10).toUpperCase()
@@ -25,17 +30,57 @@ export default function CreateCommunityPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleCreateCommunity = () => {
+  const handleCreateCommunity = async () => {
     if (!communityName || !description || !communityType) {
-      alert("Please fill in all fields")
+      setError("Please fill in all fields")
       return
     }
     if (communityType === "private" && !inviteCode) {
-      alert("Please generate an invite code for private community")
+      setError("Please generate an invite code for private community")
       return
     }
-    // Handle community creation
-    alert(`Community "${communityName}" created successfully!`)
+
+    setIsCreating(true)
+    setError(null)
+
+    try {
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) throw new Error("You must be logged in to create a community")
+
+      // Create community
+      const { data: community, error: communityError } = await supabase
+        .from('communities')
+        .insert({
+          name: communityName,
+          description: description,
+          type: communityType,
+          invite_code: communityType === 'private' ? inviteCode : null,
+          created_by: user.id,
+        })
+        .select()
+        .single()
+
+      if (communityError) throw communityError
+
+      // Add creator as admin member
+      const { error: memberError } = await supabase
+        .from('community_members')
+        .insert({
+          community_id: community.id,
+          user_id: user.id,
+          role: 'admin',
+        })
+
+      if (memberError) throw memberError
+
+      // Success! Redirect to the new community
+      router.push(`/communities/${community.id}`)
+    } catch (err: any) {
+      console.error('Error creating community:', err)
+      setError(err.message || 'Failed to create community. Please try again.')
+      setIsCreating(false)
+    }
   }
 
   return (
@@ -54,6 +99,13 @@ export default function CreateCommunityPage() {
             <h1 className="text-3xl font-bold text-foreground mb-2">Create a Community</h1>
             <p className="text-muted-foreground">Build a space for your network to connect and collaborate</p>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg">
+              {error}
+            </div>
+          )}
 
           {/* Community Type Selection */}
           {!communityType ? (
@@ -179,14 +231,20 @@ export default function CreateCommunityPage() {
                     setCommunityName("")
                     setDescription("")
                     setInviteCode("")
+                    setError(null)
                   }}
                   variant="outline"
                   className="flex-1"
+                  disabled={isCreating}
                 >
                   Back
                 </Button>
-                <Button onClick={handleCreateCommunity} className="flex-1 bg-primary hover:bg-primary/90">
-                  Create Community
+                <Button
+                  onClick={handleCreateCommunity}
+                  className="flex-1 bg-primary hover:bg-primary/90"
+                  disabled={isCreating}
+                >
+                  {isCreating ? 'Creating Community...' : 'Create Community'}
                 </Button>
               </div>
             </>
