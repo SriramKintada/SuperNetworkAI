@@ -58,6 +58,11 @@ export function OnboardingSteps({ onComplete }: OnboardingStepsProps) {
 
       if (error) throw error
 
+      // Check if data contains an error (Edge Function returned error in response body)
+      if (data?.error) {
+        throw new Error(data.error)
+      }
+
       // Populate form data with LinkedIn data
       setFormData({
         ...formData,
@@ -73,7 +78,19 @@ export function OnboardingSteps({ onComplete }: OnboardingStepsProps) {
       setCurrentStep(1)
     } catch (error: any) {
       console.error('LinkedIn import error:', error)
-      setImportError(error.message || 'Failed to import LinkedIn profile. Please try again or skip.')
+
+      // Provide helpful error messages
+      let errorMessage = 'Failed to import LinkedIn profile. '
+
+      if (error.message?.includes('profile mismatch') || error.message?.includes('private')) {
+        errorMessage = 'Unable to access this LinkedIn profile. It may be private, deleted, or the URL is incorrect. Please check your profile privacy settings or try "Skip & Fill Manually".'
+      } else if (error.message?.includes('LinkedIn URL is required')) {
+        errorMessage = 'Please enter a valid LinkedIn URL.'
+      } else {
+        errorMessage += error.message || 'Please try again or skip.'
+      }
+
+      setImportError(errorMessage)
     } finally {
       setIsImporting(false)
     }
