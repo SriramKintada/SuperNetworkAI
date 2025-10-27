@@ -52,7 +52,7 @@ export function OnboardingSteps({ onComplete }: OnboardingStepsProps) {
     setImportError(null)
 
     try {
-      const { data, error } = await supabase.functions.invoke('enrich-linkedin-profile', {
+      const { data, error } = await supabase.functions.invoke('hyper-service', {
         body: { linkedinUrl }
       })
 
