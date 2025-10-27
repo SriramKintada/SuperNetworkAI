@@ -24,21 +24,27 @@ export default function OnboardingPage() {
       const profileText = `${formData.title} at ${formData.company}. ${formData.bio}. Looking for: ${intentText}.`
 
       // Save profile to database
+      // Using headline instead of current_role for compatibility
+      const profileData = {
+        user_id: user.id,
+        name: user.user_metadata?.name || user.user_metadata?.full_name || 'User',
+        email: user.email,
+        bio: formData.bio || '',
+        headline: `${formData.title}${formData.company ? ' at ' + formData.company : ''}`,
+        intent_text: intentText,
+      }
+
+      // Add optional fields if they exist in schema
+      const optionalFields = {
+        photo_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+        intent_structured: { looking_for: formData.goals, communities: formData.communities },
+        profile_complete: true,
+        onboarding_completed: true,
+      }
+
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .upsert({
-          user_id: user.id,
-          name: user.user_metadata?.name || user.user_metadata?.full_name || 'User',
-          email: user.email,
-          photo_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
-          bio: formData.bio,
-          current_role: formData.title,
-          current_company: formData.company,
-          intent_text: intentText,
-          intent_structured: { looking_for: formData.goals, communities: formData.communities },
-          profile_complete: true,
-          onboarding_completed: true,
-        })
+        .upsert({ ...profileData, ...optionalFields })
         .select()
         .single()
 

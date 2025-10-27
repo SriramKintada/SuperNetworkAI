@@ -183,20 +183,26 @@ export default function SearchPage() {
           <div className="grid md:grid-cols-2 gap-6">
             {hasSearched ? (
               searchResults.length > 0 ? (
-                searchResults.map((match) => (
-                  <MatchCard
-                    key={match.id}
-                    id={match.id}
-                    name={match.name}
-                    title={match.current_role || match.headline || 'Member'}
-                    company={match.current_company || ''}
-                    bio={match.bio || ''}
-                    goals={match.intent_structured?.looking_for || []}
-                    matchScore={Math.round((1 - (match.distance || 0)) * 100)}
-                    onConnect={handleConnect}
-                    onPass={handlePass}
-                  />
-                ))
+                searchResults.map((match) => {
+                  // Handle both current_role and headline field names
+                  const title = match.headline || match.current_role || 'Member'
+                  const company = match.current_company || ''
+
+                  return (
+                    <MatchCard
+                      key={match.id}
+                      id={match.id}
+                      name={match.name}
+                      title={title}
+                      company={company}
+                      bio={match.bio || ''}
+                      goals={match.intent_structured?.looking_for || []}
+                      matchScore={Math.round((1 - (match.distance || 0)) * 100)}
+                      onConnect={handleConnect}
+                      onPass={handlePass}
+                    />
+                  )
+                })
               ) : (
                 <div className="col-span-2 text-center py-12">
                   <p className="text-muted-foreground mb-2">No matches found</p>
