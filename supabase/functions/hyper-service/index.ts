@@ -41,26 +41,49 @@ serve(async (req) => {
     }
 
     const profile = linkedinData[0]
-    console.log('LinkedIn data scraped:', profile.fullName)
+
+    // Extract data from new Apify response structure (basic_info, experience, etc.)
+    const basicInfo = profile.basic_info || {}
+    const fullName = basicInfo.fullname || basicInfo.full_name || `${basicInfo.first_name || ''} ${basicInfo.last_name || ''}`.trim()
+    const scrapedProfileUrl = basicInfo.profile_url || basicInfo.profileUrl || ''
+
+    console.log('LinkedIn data scraped:', fullName)
+    console.log('Profile URL from Apify:', scrapedProfileUrl)
+    console.log('Requested URL:', linkedinUrl)
+
+    // Validate that we scraped the correct profile
+    const requestedUsername = linkedinUrl.toLowerCase().replace(/https?:\/\/(www\.)?linkedin\.com\/in\//, '').replace(/\/$/, '')
+    const scrapedUsername = scrapedProfileUrl.toLowerCase().replace(/https?:\/\/(www\.)?linkedin\.com\/in\//, '').replace(/\/$/, '')
+
+    if (requestedUsername !== scrapedUsername) {
+      console.error(`WARNING: Profile mismatch! Requested: ${requestedUsername}, Got: ${scrapedUsername}`)
+      throw new Error(`LinkedIn profile mismatch. Requested profile '${requestedUsername}' but got '${scrapedUsername}'. The profile may be private, deleted, or the URL is incorrect.`)
+    }
 
     // Step 2: Use OpenAI GPT-4o Mini to extract and structure key details
     const extractionPrompt = `You are a professional profile analyzer. Extract and structure the following LinkedIn profile data into a clean, professional format.
+
+IMPORTANT: The data structure uses these fields:
+- basic_info: {fullname, headline, about, location: {city, country, full}, current_company, follower_count, connection_count}
+- experience: [array of work experiences]
+- education: [array of education]
+- skills: [array of skills]
 
 LinkedIn Profile Data:
 ${JSON.stringify(profile, null, 2)}
 
 Extract the following information in JSON format:
 {
-  "name": "Full name",
-  "headline": "Current role at company (e.g., 'Senior Engineer at Google')",
-  "bio": "A compelling 2-3 sentence professional bio summarizing their background, expertise, and career focus",
-  "location": "City, Country",
-  "skills": ["skill1", "skill2", ...] (extract top 10-15 skills),
-  "experience_summary": "Brief summary of career trajectory and key achievements",
-  "industries": ["industry1", "industry2"] (extract main industries),
-  "education": "Highest degree and institution",
-  "current_role": "Current job title",
-  "current_company": "Current company name"
+  "name": "Full name from basic_info.fullname",
+  "headline": "Current role at company (use basic_info.headline or construct from experience[0])",
+  "bio": "A compelling 2-3 sentence professional bio based on basic_info.about",
+  "location": "From basic_info.location.full",
+  "skills": ["skill1", "skill2", ...] (extract top 10-15 from skills array),
+  "experience_summary": "Brief summary of career trajectory from experience array",
+  "industries": ["industry1", "industry2"] (infer from experience and skills),
+  "education": "Highest degree from education array",
+  "current_role": "From experience[0].title",
+  "current_company": "From basic_info.current_company or experience[0].company"
 }
 
 Return ONLY valid JSON, no markdown or extra text.`
@@ -104,12 +127,12 @@ Return ONLY valid JSON, no markdown or extra text.`
     const result = {
       ...enrichedProfile,
       linkedin_url: linkedinUrl,
-      photo_url: profile.profilePicture || profile.photoUrl || null,
+      photo_url: basicInfo.profile_picture_url || profile.profilePicture || profile.photoUrl || null,
       raw_linkedin_data: {
-        followers: profile.followers,
-        connections: profile.connections,
-        posts: profile.postsCount,
-        articles: profile.articlesCount,
+        followers: basicInfo.follower_count || profile.followers || null,
+        connections: basicInfo.connection_count || profile.connections || null,
+        posts: profile.postsCount || null,
+        articles: profile.articlesCount || null,
       }
     }
 
