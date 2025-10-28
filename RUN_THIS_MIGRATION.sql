@@ -3,24 +3,76 @@
 -- Run this in Supabase SQL Editor to fix all schema issues
 -- ============================================================================
 
--- Add comprehensive professional fields
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS experience_summary TEXT;
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS all_roles TEXT[] DEFAULT '{}';
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS all_companies TEXT[] DEFAULT '{}';
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS education_summary TEXT;
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS years_of_experience INTEGER;
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS certifications TEXT[] DEFAULT '{}';
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS key_achievements TEXT[] DEFAULT '{}';
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS expertise_areas TEXT[] DEFAULT '{}';
+DO $$
+BEGIN
+    -- Add experience_summary
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='profiles' AND column_name='experience_summary') THEN
+        ALTER TABLE profiles ADD COLUMN experience_summary TEXT;
+    END IF;
 
--- Add comprehensive vectorization text field for semantic search
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS vectorization_text TEXT;
+    -- Add all_roles
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='profiles' AND column_name='all_roles') THEN
+        ALTER TABLE profiles ADD COLUMN all_roles TEXT[] DEFAULT '{}';
+    END IF;
 
--- Ensure current_role and current_company exist (should already exist from 001)
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS current_role TEXT;
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS current_company TEXT;
+    -- Add all_companies
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='profiles' AND column_name='all_companies') THEN
+        ALTER TABLE profiles ADD COLUMN all_companies TEXT[] DEFAULT '{}';
+    END IF;
 
--- Create indexes for new array fields to enable fast filtering
+    -- Add education_summary
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='profiles' AND column_name='education_summary') THEN
+        ALTER TABLE profiles ADD COLUMN education_summary TEXT;
+    END IF;
+
+    -- Add years_of_experience
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='profiles' AND column_name='years_of_experience') THEN
+        ALTER TABLE profiles ADD COLUMN years_of_experience INTEGER;
+    END IF;
+
+    -- Add certifications
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='profiles' AND column_name='certifications') THEN
+        ALTER TABLE profiles ADD COLUMN certifications TEXT[] DEFAULT '{}';
+    END IF;
+
+    -- Add key_achievements
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='profiles' AND column_name='key_achievements') THEN
+        ALTER TABLE profiles ADD COLUMN key_achievements TEXT[] DEFAULT '{}';
+    END IF;
+
+    -- Add expertise_areas
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='profiles' AND column_name='expertise_areas') THEN
+        ALTER TABLE profiles ADD COLUMN expertise_areas TEXT[] DEFAULT '{}';
+    END IF;
+
+    -- Add vectorization_text
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='profiles' AND column_name='vectorization_text') THEN
+        ALTER TABLE profiles ADD COLUMN vectorization_text TEXT;
+    END IF;
+
+    -- Add current_role (might already exist from initial schema)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='profiles' AND column_name='current_role') THEN
+        ALTER TABLE profiles ADD COLUMN current_role TEXT;
+    END IF;
+
+    -- Add current_company (might already exist from initial schema)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='profiles' AND column_name='current_company') THEN
+        ALTER TABLE profiles ADD COLUMN current_company TEXT;
+    END IF;
+END $$;
+
+-- Create indexes (these use IF NOT EXISTS so they're safe)
 CREATE INDEX IF NOT EXISTS idx_profiles_all_roles ON profiles USING GIN(all_roles);
 CREATE INDEX IF NOT EXISTS idx_profiles_all_companies ON profiles USING GIN(all_companies);
 CREATE INDEX IF NOT EXISTS idx_profiles_expertise_areas ON profiles USING GIN(expertise_areas);
@@ -35,8 +87,6 @@ COMMENT ON COLUMN profiles.all_roles IS 'All job titles held throughout career';
 COMMENT ON COLUMN profiles.all_companies IS 'All companies worked at throughout career';
 COMMENT ON COLUMN profiles.expertise_areas IS 'Core areas of professional expertise (5-10 areas)';
 COMMENT ON COLUMN profiles.key_achievements IS 'Notable achievements extracted from experience';
-COMMENT ON COLUMN profiles.current_role IS 'Current job title/position';
-COMMENT ON COLUMN profiles.current_company IS 'Current company/organization';
 
 -- Show completion message
 SELECT 'Migration completed successfully! All columns added.' AS status;
