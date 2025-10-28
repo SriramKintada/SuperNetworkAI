@@ -18,7 +18,8 @@
       "Bash(npx supabase:*)",
       "Bash($env:SUPABASE_ACCESS_TOKEN=\"sbp_326b7563fd2154a49505672e20aa08afe20946de\")",
       "Bash(export SUPABASE_ACCESS_TOKEN=\"sbp_326b7563fd2154a49505672e20aa08afe20946de\")",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(start https://supabase.com/dashboard/project/mpztkfmhgbbidrylngbw/functions/hyper-service/logs)"
     ],
     "deny": [],
     "ask": []

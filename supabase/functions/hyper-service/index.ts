@@ -15,11 +15,21 @@ serve(async (req) => {
       throw new Error('LinkedIn URL is required')
     }
 
-    console.log('Scraping LinkedIn profile:', linkedinUrl)
+    console.log('=== Starting LinkedIn Import ===')
+    console.log('Requested URL:', linkedinUrl)
 
-    // Step 1: Call Apify anchor/linkedin-profile-enrichment actor
-    const apifyResponse = await fetch(
-      `https://api.apify.com/v2/acts/anchor~linkedin-profile-enrichment/run-sync-get-dataset-items?token=${Deno.env.get('APIFY_API_KEY')}`,
+    // Step 1: Call Apify actor using regular run endpoint (not run-sync)
+    // The actor will process asynchronously and we'll poll for results
+    console.log('Step 1: Starting Apify actor run...')
+
+    const apifyApiKey = Deno.env.get('APIFY_API_KEY')
+    if (!apifyApiKey) {
+      throw new Error('APIFY_API_KEY environment variable is not set')
+    }
+
+    // Start the actor run
+    const runResponse = await fetch(
+      `https://api.apify.com/v2/acts/anchor~linkedin-profile-enrichment/runs?token=${apifyApiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -30,89 +40,129 @@ serve(async (req) => {
       }
     )
 
-    if (!apifyResponse.ok) {
-      throw new Error(`Apify API error: ${apifyResponse.statusText}`)
+    if (!runResponse.ok) {
+      const errorText = await runResponse.text()
+      console.error('Apify run start error:', errorText)
+      throw new Error(`Apify API error (${runResponse.status}): ${errorText}`)
     }
 
-    const linkedinData = await apifyResponse.json()
+    const runData = await runResponse.json()
+    const runId = runData.data.id
+    const defaultDatasetId = runData.data.defaultDatasetId
+
+    console.log('Actor run started, ID:', runId)
+    console.log('Dataset ID:', defaultDatasetId)
+
+    // Wait for the run to complete (poll status)
+    let status = 'RUNNING'
+    let attempts = 0
+    const maxAttempts = 60 // 60 attempts * 2s = 120s timeout
+
+    while (status === 'RUNNING' && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 2000)) // Wait 2 seconds
+
+      const statusResponse = await fetch(
+        `https://api.apify.com/v2/acts/anchor~linkedin-profile-enrichment/runs/${runId}?token=${apifyApiKey}`
+      )
+
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json()
+        status = statusData.data.status
+        console.log(`Status check ${attempts + 1}/${maxAttempts}: ${status}`)
+      }
+
+      attempts++
+    }
+
+    if (status !== 'SUCCEEDED') {
+      throw new Error(`Apify run did not complete successfully. Status: ${status}`)
+    }
+
+    console.log('Actor run completed successfully!')
+
+    // Fetch the dataset items
+    const datasetResponse = await fetch(
+      `https://api.apify.com/v2/datasets/${defaultDatasetId}/items?token=${apifyApiKey}`
+    )
+
+    if (!datasetResponse.ok) {
+      const errorText = await datasetResponse.text()
+      console.error('Dataset fetch error:', errorText)
+      throw new Error(`Failed to fetch dataset: ${datasetResponse.status}`)
+    }
+
+    const linkedinData = await datasetResponse.json()
+    console.log('Dataset items count:', linkedinData?.length || 0)
 
     if (!linkedinData || linkedinData.length === 0) {
-      throw new Error('No data returned from LinkedIn scraper')
+      throw new Error('No data returned from LinkedIn scraper. The profile may be private or inaccessible.')
     }
 
     const profile = linkedinData[0]
-    console.log('LinkedIn data scraped successfully')
+    console.log('Profile name:', profile.full_name || profile.first_name + ' ' + profile.last_name)
     console.log('Profile URL:', profile.url)
-    console.log('Profile Name:', profile.full_name || profile.name)
 
     // Validate that we scraped the correct profile
     const requestedUsername = linkedinUrl.toLowerCase().replace(/https?:\/\/(www\.)?linkedin\.com\/in\//, '').replace(/\/$/, '')
     const scrapedUrl = (profile.url || '').toLowerCase()
     const scrapedUsername = scrapedUrl.replace(/https?:\/\/(www\.)?linkedin\.com\/in\//, '').replace(/\/$/, '')
 
+    console.log('Username comparison - Requested:', requestedUsername, 'Scraped:', scrapedUsername)
+
     if (requestedUsername && scrapedUsername && requestedUsername !== scrapedUsername) {
-      console.error(`WARNING: Profile mismatch! Requested: ${requestedUsername}, Got: ${scrapedUsername}`)
-      throw new Error(`LinkedIn profile mismatch. Requested profile '${requestedUsername}' but got '${scrapedUsername}'. The profile may be private, deleted, or the URL is incorrect.`)
+      console.error(`Profile mismatch! Requested: ${requestedUsername}, Got: ${scrapedUsername}`)
+      throw new Error(`LinkedIn profile mismatch. Requested '${requestedUsername}' but got '${scrapedUsername}'. The profile may be private, deleted, or the URL is incorrect.`)
     }
 
     // Step 2: Use OpenAI GPT-4o to extract and structure comprehensive profile details
-    const extractionPrompt = `You are an expert LinkedIn profile analyzer. Your task is to extract comprehensive professional information from this LinkedIn profile data and structure it for AI-powered matching and search.
+    console.log('Step 2: Calling OpenAI for data extraction...')
 
-CRITICAL INSTRUCTIONS:
-1. Extract ALL relevant information about the person's professional background
-2. Create a rich, detailed bio that captures their expertise, experience, and career focus
-3. Identify ALL skills mentioned or implied from their work experience
-4. Summarize their career trajectory and key achievements
-5. Extract current role and company accurately
-6. Identify all roles they've worked in throughout their career
+    const extractionPrompt = `You are an expert LinkedIn profile analyzer. Extract comprehensive professional information from this LinkedIn profile data.
 
 LinkedIn Profile Data:
 ${JSON.stringify(profile, null, 2)}
 
-DATA STRUCTURE GUIDE:
-- full_name / first_name + last_name: Person's name
-- headline: Professional headline/title
-- summary: About section (use this for bio)
-- country, city: Location
-- profile_pic_url: Profile picture
-- follower_count: Number of followers
-- skills: Array of skills
-- certifications: Array of certifications
-- experiences: Array of work experiences with {company_name, title, description, start_date, end_date}
-- education: Array of education with {school, degree, field_of_study}
-- company_name: Most recent company
-- company_industry: Industry
+IMPORTANT FIELD MAPPINGS:
+- Name: full_name OR (first_name + last_name)
+- Headline: headline field
+- Bio: summary OR about field (create compelling 3-5 sentence bio)
+- Location: city + country OR location.full
+- Current role: company_name field OR experiences[0].title
+- Current company: company_name field OR experiences[0].company
+- Skills: skills array (extract 15-20+)
+- Experience: experiences array (extract all roles and companies)
+- Education: education array
 
-EXTRACT THE FOLLOWING IN JSON FORMAT:
+EXTRACT IN JSON FORMAT (ONLY JSON, NO MARKDOWN):
 {
   "name": "Full name",
-  "current_role": "Current job title (from most recent experience or headline)",
-  "current_company": "Current company name",
-  "bio": "A compelling, detailed 3-5 sentence professional bio that summarizes their background, expertise, key achievements, and career focus. Include specific domains they work in, technologies they use, and their professional strengths.",
+  "current_role": "Current job title",
+  "current_company": "Current company",
+  "bio": "Detailed 3-5 sentence professional bio",
   "location": "City, Country",
-  "skills": ["skill1", "skill2", ...] (Extract 15-20 skills from skills array AND infer additional skills from experience descriptions),
-  "experience_summary": "Detailed summary of their career trajectory, highlighting progression, key roles, major achievements, and areas of expertise. 2-3 sentences.",
-  "all_roles": ["role1", "role2", ...] (List ALL job titles they've held, including current role),
-  "all_companies": ["company1", "company2", ...] (List ALL companies they've worked at),
-  "industries": ["industry1", "industry2", ...] (Infer industries from experience and current company),
-  "education_summary": "Highest degree, institution, and field of study",
-  "years_of_experience": "Estimated total years of professional experience (number)",
-  "certifications": ["cert1", "cert2", ...] (If available),
-  "key_achievements": ["achievement1", "achievement2", ...] (Extract from experience descriptions, 3-5 notable achievements),
-  "expertise_areas": ["area1", "area2", ...] (Core areas of expertise inferred from skills and experience, 5-10 areas)
+  "skills": ["skill1", "skill2", ...] (15-20 skills),
+  "experience_summary": "Career trajectory summary",
+  "all_roles": ["role1", "role2", ...] (all job titles),
+  "all_companies": ["company1", "company2", ...] (all companies),
+  "industries": ["industry1", ...] (inferred from experience),
+  "education_summary": "Highest degree and institution",
+  "years_of_experience": 10,
+  "certifications": ["cert1", ...],
+  "key_achievements": ["achievement1", ...] (3-5 achievements),
+  "expertise_areas": ["area1", ...] (5-10 core expertise areas)
 }
 
-IMPORTANT:
-- Be thorough and detailed in bio and experience_summary
-- Extract as many skills as possible (15-20+)
-- Infer skills from job descriptions even if not in skills array
-- Make the output rich for semantic search and AI matching
-- Return ONLY valid JSON, no markdown or extra text`
+Return ONLY valid JSON, no markdown.`
+
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+    if (!openaiApiKey) {
+      throw new Error('OPENAI_API_KEY environment variable is not set')
+    }
 
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        'Authorization': `Bearer ${openaiApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -120,7 +170,7 @@ IMPORTANT:
         messages: [
           {
             role: 'system',
-            content: 'You are an expert profile analyzer specializing in extracting comprehensive professional information for AI-powered talent matching. Always return valid, detailed JSON with rich context for semantic search.'
+            content: 'You are an expert profile analyzer. Always return valid JSON only, no markdown.'
           },
           {
             role: 'user',
@@ -132,10 +182,12 @@ IMPORTANT:
       }),
     })
 
+    console.log('OpenAI response status:', openaiResponse.status)
+
     if (!openaiResponse.ok) {
       const errorText = await openaiResponse.text()
       console.error('OpenAI API error:', errorText)
-      throw new Error(`OpenAI API error: ${openaiResponse.statusText}`)
+      throw new Error(`OpenAI API error (${openaiResponse.status}): ${errorText}`)
     }
 
     const openaiData = await openaiResponse.json()
@@ -145,6 +197,8 @@ IMPORTANT:
     extractedData = extractedData.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 
     const enrichedProfile = JSON.parse(extractedData)
+    console.log('Successfully parsed OpenAI JSON response')
+    console.log('Extracted skills count:', enrichedProfile.skills?.length || 0)
 
     // Step 3: Combine with raw LinkedIn data
     const result = {
@@ -158,23 +212,26 @@ IMPORTANT:
         public_identifier: profile.public_identifier || null,
         open_to_work: profile.open_to_work || false,
       },
-      // Create comprehensive text for vectorization
-      vectorization_text: `${enrichedProfile.name}. ${enrichedProfile.headline || enrichedProfile.current_role + ' at ' + enrichedProfile.current_company}. ${enrichedProfile.bio}. ${enrichedProfile.experience_summary}. Located in ${enrichedProfile.location}. Skills: ${enrichedProfile.skills.join(', ')}. Industries: ${enrichedProfile.industries.join(', ')}. Expertise: ${enrichedProfile.expertise_areas.join(', ')}. Education: ${enrichedProfile.education_summary}. Roles: ${enrichedProfile.all_roles.join(', ')}. Companies: ${enrichedProfile.all_companies.join(', ')}. Achievements: ${enrichedProfile.key_achievements.join('. ')}.`
+      vectorization_text: `${enrichedProfile.name}. ${enrichedProfile.headline || enrichedProfile.current_role + ' at ' + enrichedProfile.current_company}. ${enrichedProfile.bio}. ${enrichedProfile.experience_summary}. Located in ${enrichedProfile.location}. Skills: ${enrichedProfile.skills?.join(', ') || ''}. Industries: ${enrichedProfile.industries?.join(', ') || ''}. Expertise: ${enrichedProfile.expertise_areas?.join(', ') || ''}. Education: ${enrichedProfile.education_summary || ''}. Roles: ${enrichedProfile.all_roles?.join(', ') || ''}. Companies: ${enrichedProfile.all_companies?.join(', ') || ''}. Achievements: ${enrichedProfile.key_achievements?.join('. ') || ''}.`
     }
 
-    console.log('Profile enriched successfully with comprehensive data')
-    console.log('Skills extracted:', enrichedProfile.skills.length)
-    console.log('Expertise areas:', enrichedProfile.expertise_areas.length)
+    console.log('=== LinkedIn Import Complete ===')
+    console.log('Skills extracted:', result.skills?.length || 0)
 
     return new Response(JSON.stringify(result), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    console.error('Error enriching profile:', error)
+    console.error('=== ERROR in LinkedIn Import ===')
+    console.error('Error message:', error.message)
+    console.error('Error stack:', error.stack)
+
     return new Response(
       JSON.stringify({
-        error: error.message,
-        details: 'Failed to scrape and enrich LinkedIn profile'
+        error: error.message || 'Unknown error occurred',
+        details: 'Failed to scrape and enrich LinkedIn profile',
+        errorType: error.constructor.name
       }),
       {
         status: 500,
