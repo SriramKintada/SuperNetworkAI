@@ -18,18 +18,18 @@ serve(async (req) => {
     console.log('=== Starting LinkedIn Import ===')
     console.log('Requested URL:', linkedinUrl)
 
-    // Step 1: Call Apify actor using regular run endpoint (not run-sync)
-    // The actor will process asynchronously and we'll poll for results
-    console.log('Step 1: Starting Apify actor run...')
+    // Step 1: Call Apify actor using synchronous endpoint
+    // This is simpler and returns results immediately
+    console.log('Step 1: Calling Apify actor (synchronous)...')
 
     const apifyApiKey = Deno.env.get('APIFY_API_KEY')
     if (!apifyApiKey) {
       throw new Error('APIFY_API_KEY environment variable is not set')
     }
 
-    // Start the actor run
-    const runResponse = await fetch(
-      `https://api.apify.com/v2/acts/anchor~linkedin-profile-enrichment/runs?token=${apifyApiKey}`,
+    // Use the synchronous endpoint that waits for completion and returns dataset items
+    const apifyResponse = await fetch(
+      `https://api.apify.com/v2/acts/anchor~linkedin-profile-enrichment/run-sync-get-dataset-items?token=${apifyApiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -40,58 +40,15 @@ serve(async (req) => {
       }
     )
 
-    if (!runResponse.ok) {
-      const errorText = await runResponse.text()
-      console.error('Apify run start error:', errorText)
-      throw new Error(`Apify API error (${runResponse.status}): ${errorText}`)
+    console.log('Apify response status:', apifyResponse.status, apifyResponse.statusText)
+
+    if (!apifyResponse.ok) {
+      const errorText = await apifyResponse.text()
+      console.error('Apify API error:', errorText)
+      throw new Error(`Apify API error (${apifyResponse.status}): ${errorText}`)
     }
 
-    const runData = await runResponse.json()
-    const runId = runData.data.id
-    const defaultDatasetId = runData.data.defaultDatasetId
-
-    console.log('Actor run started, ID:', runId)
-    console.log('Dataset ID:', defaultDatasetId)
-
-    // Wait for the run to complete (poll status)
-    let status = 'RUNNING'
-    let attempts = 0
-    const maxAttempts = 60 // 60 attempts * 2s = 120s timeout
-
-    while (status === 'RUNNING' && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 2000)) // Wait 2 seconds
-
-      const statusResponse = await fetch(
-        `https://api.apify.com/v2/acts/anchor~linkedin-profile-enrichment/runs/${runId}?token=${apifyApiKey}`
-      )
-
-      if (statusResponse.ok) {
-        const statusData = await statusResponse.json()
-        status = statusData.data.status
-        console.log(`Status check ${attempts + 1}/${maxAttempts}: ${status}`)
-      }
-
-      attempts++
-    }
-
-    if (status !== 'SUCCEEDED') {
-      throw new Error(`Apify run did not complete successfully. Status: ${status}`)
-    }
-
-    console.log('Actor run completed successfully!')
-
-    // Fetch the dataset items
-    const datasetResponse = await fetch(
-      `https://api.apify.com/v2/datasets/${defaultDatasetId}/items?token=${apifyApiKey}`
-    )
-
-    if (!datasetResponse.ok) {
-      const errorText = await datasetResponse.text()
-      console.error('Dataset fetch error:', errorText)
-      throw new Error(`Failed to fetch dataset: ${datasetResponse.status}`)
-    }
-
-    const linkedinData = await datasetResponse.json()
+    const linkedinData = await apifyResponse.json()
     console.log('Dataset items count:', linkedinData?.length || 0)
 
     if (!linkedinData || linkedinData.length === 0) {
