@@ -26,7 +26,7 @@ async function testApifyDirect(linkedinUrl) {
     const url = `https://api.apify.com/v2/acts/anchor~linkedin-profile-enrichment/run-sync-get-dataset-items?token=${APIFY_API_KEY}`
 
     const requestBody = {
-      urls: [linkedinUrl],
+      startUrls: [{ url: linkedinUrl }],
       proxyConfiguration: { useApifyProxy: true },
     }
 
