@@ -28,15 +28,19 @@ serve(async (req) => {
     }
 
     // Use the synchronous endpoint that waits for completion and returns dataset items
+    const requestBody = {
+      startUrls: [{ url: linkedinUrl }],
+      proxyConfiguration: { useApifyProxy: true },
+    }
+
+    console.log('Request body:', JSON.stringify(requestBody, null, 2))
+
     const apifyResponse = await fetch(
       `https://api.apify.com/v2/acts/anchor~linkedin-profile-enrichment/run-sync-get-dataset-items?token=${apifyApiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          urls: [linkedinUrl],
-          proxyConfiguration: { useApifyProxy: true },
-        }),
+        body: JSON.stringify(requestBody),
       }
     )
 
