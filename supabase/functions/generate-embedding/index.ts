@@ -26,8 +26,11 @@ serve(async (req) => {
 
     if (!profile) throw new Error('Profile not found')
 
-    // Generate embedding text
-    const embeddingText = `${profile.name} ${profile.headline || ''} ${profile.bio || ''} ${profile.intent_text || ''} ${profile.skills?.join(' ') || ''}`
+    // Generate comprehensive embedding text
+    // Prefer vectorization_text (created by LinkedIn enrichment) for comprehensive semantic search
+    // Fall back to building text from available fields
+    const embeddingText = profile.vectorization_text ||
+      `${profile.name}. ${profile.headline || ''}. ${profile.bio || ''}. ${profile.experience_summary || ''}. ${profile.intent_text || ''}. Skills: ${profile.skills?.join(', ') || ''}. Industries: ${profile.industries?.join(', ') || ''}. Expertise: ${profile.expertise_areas?.join(', ') || ''}. Location: ${profile.location || ''}. Roles: ${profile.all_roles?.join(', ') || ''}. Companies: ${profile.all_companies?.join(', ') || ''}. Education: ${profile.education_summary || ''}. Achievements: ${profile.key_achievements?.join('. ') || ''}.`
 
     // Call OpenAI API
     const response = await fetch('https://api.openai.com/v1/embeddings', {

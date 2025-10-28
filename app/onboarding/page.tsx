@@ -22,31 +22,45 @@ export default function OnboardingPage() {
       // Create profile text for embedding (include all enriched data)
       const intentText = formData.goals.join(", ")
       const skillsText = formData.skills?.join(", ") || ""
-      const profileText = `${formData.title} at ${formData.company}. ${formData.bio}. ${formData.location ? 'Based in ' + formData.location + '.' : ''} Skills: ${skillsText}. Looking for: ${intentText}.`
+
+      // Build comprehensive vectorization text
+      const vectorizationText = formData.vectorization_text ||
+        `${formData.name || user.user_metadata?.name || 'User'}. ${formData.title} at ${formData.company}. ${formData.bio}. ${formData.experience_summary || ''}. ${formData.location ? 'Based in ' + formData.location + '.' : ''} Skills: ${skillsText}. Looking for: ${intentText}.`
 
       // Save profile to database
-      // Using headline instead of current_role for compatibility
       const profileData = {
         user_id: user.id,
-        name: user.user_metadata?.name || user.user_metadata?.full_name || 'User',
+        name: formData.name || user.user_metadata?.name || user.user_metadata?.full_name || 'User',
         email: user.email,
         bio: formData.bio || '',
-        headline: `${formData.title}${formData.company ? ' at ' + formData.company : ''}`,
+        headline: formData.headline || `${formData.title}${formData.company ? ' at ' + formData.company : ''}`,
         intent_text: intentText,
+        current_role: formData.title || formData.current_role,
+        current_company: formData.company || formData.current_company,
       }
 
       // Add optional fields if they exist in schema
       const optionalFields: any = {
-        photo_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+        photo_url: formData.photo_url || user.user_metadata?.avatar_url || user.user_metadata?.picture,
         intent_structured: { looking_for: formData.goals, communities: formData.communities },
         profile_complete: true,
         onboarding_completed: true,
+        vectorization_text: vectorizationText,
       }
 
-      // Add LinkedIn-enriched fields
+      // Add LinkedIn-enriched comprehensive fields
       if (formData.location) optionalFields.location = formData.location
       if (formData.skills && formData.skills.length > 0) optionalFields.skills = formData.skills
       if (formData.linkedin_url) optionalFields.linkedin_url = formData.linkedin_url
+      if (formData.experience_summary) optionalFields.experience_summary = formData.experience_summary
+      if (formData.all_roles && formData.all_roles.length > 0) optionalFields.all_roles = formData.all_roles
+      if (formData.all_companies && formData.all_companies.length > 0) optionalFields.all_companies = formData.all_companies
+      if (formData.industries && formData.industries.length > 0) optionalFields.industries = formData.industries
+      if (formData.education_summary) optionalFields.education_summary = formData.education_summary
+      if (formData.years_of_experience) optionalFields.years_of_experience = formData.years_of_experience
+      if (formData.certifications && formData.certifications.length > 0) optionalFields.certifications = formData.certifications
+      if (formData.key_achievements && formData.key_achievements.length > 0) optionalFields.key_achievements = formData.key_achievements
+      if (formData.expertise_areas && formData.expertise_areas.length > 0) optionalFields.expertise_areas = formData.expertise_areas
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')

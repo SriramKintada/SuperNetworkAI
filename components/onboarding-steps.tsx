@@ -31,6 +31,7 @@ export function OnboardingSteps({ onComplete }: OnboardingStepsProps) {
   const [isImporting, setIsImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
+    name: "",
     bio: "",
     title: "",
     company: "",
@@ -40,6 +41,20 @@ export function OnboardingSteps({ onComplete }: OnboardingStepsProps) {
     goals: [] as string[],
     communities: [] as string[],
     notifications: true,
+    headline: "",
+    photo_url: "",
+    experience_summary: "",
+    all_roles: [] as string[],
+    all_companies: [] as string[],
+    industries: [] as string[],
+    education_summary: "",
+    years_of_experience: undefined as number | undefined,
+    certifications: [] as string[],
+    key_achievements: [] as string[],
+    expertise_areas: [] as string[],
+    vectorization_text: "",
+    current_role: "",
+    current_company: "",
   })
 
   const handleLinkedinImport = async () => {
@@ -63,15 +78,30 @@ export function OnboardingSteps({ onComplete }: OnboardingStepsProps) {
         throw new Error(data.error)
       }
 
-      // Populate form data with LinkedIn data
+      // Populate form data with comprehensive LinkedIn data
       setFormData({
         ...formData,
+        name: data.name || formData.name,
         bio: data.bio || formData.bio,
         title: data.current_role || formData.title,
         company: data.current_company || formData.company,
         location: data.location || formData.location,
         skills: data.skills || formData.skills,
         linkedin_url: linkedinUrl,
+        headline: data.headline || formData.headline,
+        photo_url: data.photo_url || formData.photo_url,
+        experience_summary: data.experience_summary || formData.experience_summary,
+        all_roles: data.all_roles || formData.all_roles,
+        all_companies: data.all_companies || formData.all_companies,
+        industries: data.industries || formData.industries,
+        education_summary: data.education_summary || formData.education_summary,
+        years_of_experience: data.years_of_experience || formData.years_of_experience,
+        certifications: data.certifications || formData.certifications,
+        key_achievements: data.key_achievements || formData.key_achievements,
+        expertise_areas: data.expertise_areas || formData.expertise_areas,
+        vectorization_text: data.vectorization_text || formData.vectorization_text,
+        current_role: data.current_role || formData.current_role,
+        current_company: data.current_company || formData.current_company,
       })
 
       // Auto-advance to next step

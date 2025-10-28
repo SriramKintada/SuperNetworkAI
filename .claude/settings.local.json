@@ -17,7 +17,8 @@
       "Bash(node:*)",
       "Bash(npx supabase:*)",
       "Bash($env:SUPABASE_ACCESS_TOKEN=\"sbp_326b7563fd2154a49505672e20aa08afe20946de\")",
-      "Bash(export SUPABASE_ACCESS_TOKEN=\"sbp_326b7563fd2154a49505672e20aa08afe20946de\")"
+      "Bash(export SUPABASE_ACCESS_TOKEN=\"sbp_326b7563fd2154a49505672e20aa08afe20946de\")",
+      "Bash(git rm:*)"
     ],
     "deny": [],
     "ask": []
